@@ -3,12 +3,11 @@
 # Copyright © 2011-2012, RedJack, LLC.
 # All rights reserved.
 #
-# Please see the LICENSE.txt file in this distribution for license
-# details.
+# Please see the COPYING file in this distribution for license details.
 # ----------------------------------------------------------------------
 
 cmake_minimum_required(VERSION 2.6)
-set(PROJECT_NAME APPNAME)
+set(PROJECT_NAME copse)
 project(${PROJECT_NAME})
 enable_testing()
 

@@ -3,11 +3,11 @@ exec_prefix=${prefix}
 libdir=${exec_prefix}/lib
 includedir=${prefix}/include
 sharedir=${prefix}/share
-sphinxdir=${sharedir}/doc/APPNAME/html
+sphinxdir=${sharedir}/doc/copse/html
 
-Name: APPNAME
-Description: FILL_THIS_IN
+Name: copse
+Description: CPS event library for C
 Version: @VERSION@
-URL: FILL_THIS_IN
-Libs: -L${libdir} -lAPPNAME
+URL: http://github.com/redjack/copse/
+Libs: -L${libdir} -lcopse
 Cflags: -I${includedir}

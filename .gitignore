@@ -2,10 +2,10 @@
 /.build/
 
 RELEASE-VERSION
-APPNAME.pc
+copse.pc
 
-/APPNAME*.tar.gz
-/APPNAME*.tar.bz2
+/copse*.tar.gz
+/copse*.tar.bz2
 
 *.[oa]
 *.os
