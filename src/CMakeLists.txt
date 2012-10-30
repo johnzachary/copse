@@ -12,16 +12,13 @@ include_directories(../include)
 # Build the library
 
 set(LIBCOPSE_SRC
-    libcopse/foo.c
+    libcopse/cps.c
 )
 
 add_library(libcopse SHARED ${LIBCOPSE_SRC})
 set_target_properties(libcopse PROPERTIES
     OUTPUT_NAME copse
     SOVERSION 0.0.0)
-target_link_libraries(libcopse
-    ${CORK_LIBRARIES}
-)
 
 install(TARGETS libcopse DESTINATION lib)
 
