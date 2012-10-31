@@ -15,10 +15,6 @@
 #define DESCRIBE_TEST \
     fprintf(stderr, "--- %s\n", __func__);
 
-#define container_of(field, struct_type, field_name) \
-    ((struct_type *) (- offsetof(struct_type, field_name) + \
-                      (void *) (field)))
-
 #define fail_unless_equal(what, format, expected, actual) \
     (fail_unless((expected) == (actual), \
                  "%s not equal (expected " format \
