@@ -8,6 +8,7 @@
  */
 
 #include <stdlib.h>
+#include <string.h>
 
 #include "copse/cps.h"
 #include "copse/round-robin.h"
@@ -25,24 +26,30 @@
 #endif
 
 
-struct cps_rr_entry {
-    struct cps_cont  *cont;
-    struct cps_rr_entry  *next;
-};
+#define INITIAL_QUEUE_SIZE  16
 
 struct cps_rr_priv {
     struct cps_rr  public;
     struct cps_cont  *done;
-    /* Invariant:
-     *   If the work queue is empty, head == tail == NULL.
-     *   Otherwise, head and tail encode a circular singly-linked list.
-     */
-    struct cps_rr_entry  *head;
-    struct cps_rr_entry  *tail;
-    /* cpr_rr_entry instances that we've allocated but aren't currently being
-     * used in the work queue. */
-    struct cps_rr_entry  *unused;
+
+    /* The work queue.  This is a ring buffer of continuation pointers.  The
+     * size of the ring buffer will always be a power of 2, allowing us to
+     * module by the queue size with a & operation instead of a %.
+     *
+     * The head is the index into the work queue of the next continuation to
+     * pass control to.  The tail is the index of the next empty element of the
+     * work queue.
+     *
+     * We always leave at least one element of the queue empty.  This means that
+     * if head == tail, the queue is empty. */
+    struct cps_cont  **queue;
+    size_t  size_mask;  /* == allocated_count - 1 */
+    size_t  head;
+    size_t  tail;
 };
+
+#define queue_used_size(self) \
+    (((self)->tail - (self)->head) & (self)->size_mask)
 
 
 static int
@@ -59,9 +66,10 @@ cps_rr_new(void)
     DEBUG("[%p] Allocated new round-robin scheduler\n", self);
     self->public.start.resume = cps_rr__start;
     self->public.yield.resume = cps_rr__yield;
-    self->head = NULL;
-    self->tail = NULL;
-    self->unused = NULL;
+    self->queue = malloc(INITIAL_QUEUE_SIZE * sizeof(struct cps_cont *));
+    self->size_mask = INITIAL_QUEUE_SIZE - 1;
+    self->head = 0;
+    self->tail = 0;
     return &self->public;
 }
 
@@ -70,23 +78,8 @@ cps_rr_free(struct cps_rr *pself)
 {
     struct cps_rr_priv  *self =
         cps_container_of(pself, struct cps_rr_priv, public);
-    struct cps_rr_entry  *curr;
-    struct cps_rr_entry  *next;
-
     DEBUG("[%p] Freeing round-robin scheduler\n", self);
-
-    for (curr = self->head; curr != NULL; curr = next) {
-        DEBUG("[%p] Freeing head entry %p\n", self, curr);
-        next = curr->next;
-        free(curr);
-    }
-
-    for (curr = self->unused; curr != NULL; curr = next) {
-        DEBUG("[%p] Freeing unused entry %p\n", self, curr);
-        next = curr->next;
-        free(curr);
-    }
-
+    free(self->queue);
     free(self);
 }
 
@@ -95,30 +88,45 @@ cps_rr_add(struct cps_rr *pself, struct cps_cont *cont)
 {
     struct cps_rr_priv  *self =
         cps_container_of(pself, struct cps_rr_priv, public);
-    struct cps_rr_entry  *entry;
+    size_t  old_used_size = queue_used_size(self);
 
     DEBUG("[%p] Adding continuation %p\n", self, cont);
+    if (old_used_size == self->size_mask) {
+        /* The queue is full.  Resize! */
+        size_t  old_size = self->size_mask + 1;
+        size_t  new_size = old_size * 2;
+        size_t  pre_size;
+        struct cps_cont  **queue = malloc(new_size * sizeof(struct cps_cont *));
+        DEBUG("[%p]   Resizing work queue to %zu elements\n", self, new_size);
 
-    if (self->unused == NULL) {
-        entry = malloc(sizeof(struct cps_rr_entry));
-        DEBUG("[%p]   New entry %p\n", self, entry);
-    } else {
-        entry = self->unused;
-        self->unused = entry->next;
-        DEBUG("[%p]   Reusing entry %p\n", self, entry);
+        /* Copy the existing continuations into the beginning of the work queue.
+         * (We can't reuse the old queue directly because the wrap-around point
+         * might have changed.  This code path will be executed infrequently
+         * enough that we don't need to over-optimize it.) */
+
+        /* The number of elements in the old queue that appear before the
+         * wrap-around point of the ring buffer. */
+        pre_size = old_size - self->head;
+
+        DEBUG("[%p]   Moving %zu elements to beginning of new queue\n",
+              self, pre_size);
+        memcpy(queue, self->queue + self->head,
+               pre_size * sizeof(struct cps_cont *));
+        if (self->head > 0) {
+            DEBUG("[%p]   Moving %zu elements to end of new queue\n",
+                  self, self->head);
+            memcpy(queue + pre_size, self->queue,
+                   self->head * sizeof(struct cps_cont *));
+        }
+
+        self->queue = queue;
+        self->head = 0;
+        self->tail = old_used_size;
+        self->size_mask = new_size - 1;
     }
 
-    if (self->head == NULL) {
-        self->head = entry;
-    } else {
-        self->tail->next = entry;
-    }
-
-    self->tail = entry;
-    entry->cont = cont;
-    entry->next = self->head;
-    DEBUG("[%p]   head: %p -> %p\n", self, self->head, self->head->next);
-    DEBUG("[%p]   tail: %p -> %p\n", self, self->tail, self->tail->next);
+    self->queue[self->tail] = cont;
+    self->tail = (self->tail + 1) & self->size_mask;
 }
 
 
@@ -127,62 +135,27 @@ cps_rr__yield(struct cps_cont *cont, struct cps_cont *next)
 {
     struct cps_rr_priv  *self =
         cps_container_of(cont, struct cps_rr_priv, public.yield);
-    struct cps_rr_entry  *head = self->head;
     struct cps_cont  *head_cont;
 
-    /* Fast path: If there isn't anything in the work queue, immediately pass
-     * control to `next`. */
-    if (head == NULL) {
-        if (next == cps_done) {
-            /* If `next` is cps_done, then all of the entries in the work queue
-             * have completed.  Return from the round-robin scheduler. */
-            DEBUG("[%p] All continuations finished\n", self);
-            return cps_return(self->done);
-        } else {
-            /* Otherwise, `next` is probably the final continuation we need to
-             * run.  However, it might pass control back to us with *another*
-             * continuation to run, so we need to tell it to return to the
-             * scheduler. */
-            DEBUG("[%p] Yielding directly to new continuation %p\n", self, next);
-            return cps_resume(next, cont);
-        }
+    /* Add `next` to the work queue if it represents a real continuation. */
+    if (next != cps_done) {
+        DEBUG("[%p] Adding continuation %p to end of queue\n", self, next);
+        self->queue[self->tail] = next;
+        self->tail = (self->tail + 1) & self->size_mask;
     }
 
-    /* There's something in the work queue to pass control to. */
-    head_cont = head->cont;
-
-    if (next != &cps_done_cont) {
-        /* If the `next` continuation is not cps_done, we reuse the current head
-         * of the work queue to store `next`, move that entry to the end of the
-         * work queue. */
-        DEBUG("[%p] Reusing entry %p for new continuation %p\n",
-              self, head, next);
-        head->cont = next;
-        self->head = head->next;
-        self->tail = head; /* == self->tail->next */
+    if (self->head == self->tail) {
+        /* All of the entries in the work queue have completed.  Return from the
+         * round-robin scheduler. */
+        DEBUG("[%p] All continuations finished\n", self);
+        return cps_return(self->done);
     } else {
-        /* If `next` is cps_done, then we remove the current entry from the work
-         * queue entirely. */
-        DEBUG("[%p] Removing entry %p from work queue\n", self, head);
-        DEBUG("[%p]   head: %p -> %p\n", self, self->head, self->head->next);
-        DEBUG("[%p]   tail: %p -> %p\n", self, self->tail, self->tail->next);
-        if (head->next == self->head) {
-            /* This is the last entry in the work queue. */
-            DEBUG("[%p]   Final entry in queue\n", self);
-            self->head = NULL;
-            self->tail = NULL;
-        } else {
-            self->head = head->next;
-            self->tail->next = head->next;
-        }
-
-        head->next = self->unused;
-        self->unused = head;
+        /* There's something in the work queue to pass control to. */
+        head_cont = self->queue[self->head];
+        self->head = (self->head + 1) & self->size_mask;
+        DEBUG("[%p] Yielding to continuation %p\n", self, head_cont);
+        return cps_resume(head_cont, cont);
     }
-
-    /* And then pass control to the continuation at the head of the work queue. */
-    DEBUG("[%p] Yielding to continuation %p\n", self, head_cont);
-    return cps_resume(head_cont, cont);
 }
 
 static int
