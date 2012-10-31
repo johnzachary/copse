@@ -19,9 +19,9 @@ struct cps_cont   cps_done_cont = {
 static int
 cps_done__resume(struct cps_cont *cont, struct cps_cont *next)
 {
-    if (next == &cps_done_cont) {
+    if (next == cps_done) {
         return 0;
     } else {
-        return cps_done(next);
+        return cps_return(next);
     }
 }

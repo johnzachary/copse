@@ -13,6 +13,7 @@ include_directories(../include)
 
 set(LIBCOPSE_SRC
     libcopse/cps.c
+    libcopse/round-robin.c
 )
 
 add_library(libcopse SHARED ${LIBCOPSE_SRC})
