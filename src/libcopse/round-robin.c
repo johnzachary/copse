@@ -48,12 +48,10 @@ struct cps_rr_priv {
     size_t  tail;
 };
 
+#define queue_is_empty(self)  ((self)->head == (self)->tail)
 #define queue_used_size(self) \
     (((self)->tail - (self)->head) & (self)->size_mask)
 
-
-static int
-cps_rr__start(struct cps_cont *cont, struct cps_cont *next);
 
 static int
 cps_rr__yield(struct cps_cont *cont, struct cps_cont *next);
@@ -64,7 +62,6 @@ cps_rr_new(void)
 {
     struct cps_rr_priv  *self = malloc(sizeof(struct cps_rr_priv));
     DEBUG("[%p] Allocated new round-robin scheduler\n", self);
-    self->public.start.resume = cps_rr__start;
     self->public.yield.resume = cps_rr__yield;
     self->queue = malloc(INITIAL_QUEUE_SIZE * sizeof(struct cps_cont *));
     self->size_mask = INITIAL_QUEUE_SIZE - 1;
@@ -137,32 +134,34 @@ cps_rr__yield(struct cps_cont *cont, struct cps_cont *next)
         cps_container_of(cont, struct cps_rr_priv, public.yield);
     struct cps_cont  *head_cont;
 
-    /* Add `next` to the work queue if it represents a real continuation. */
-    if (next != cps_done) {
-        DEBUG("[%p] Adding continuation %p to end of queue\n", self, next);
-        self->queue[self->tail] = next;
-        self->tail = (self->tail + 1) & self->size_mask;
-    }
+    /* Add `next` to the work queue. */
+    DEBUG("[%p] Adding continuation %p to end of queue\n", self, next);
+    self->queue[self->tail] = next;
+    self->tail = (self->tail + 1) & self->size_mask;
 
-    if (self->head == self->tail) {
-        /* All of the entries in the work queue have completed.  Return from the
-         * round-robin scheduler. */
-        DEBUG("[%p] All continuations finished\n", self);
-        return cps_return(self->done);
-    } else {
-        /* There's something in the work queue to pass control to. */
-        head_cont = self->queue[self->head];
-        self->head = (self->head + 1) & self->size_mask;
-        DEBUG("[%p] Yielding to continuation %p\n", self, head_cont);
-        return cps_resume(head_cont, cont);
-    }
+    /* There must be something in the work queue to pass control to, since we
+     * just added an element. */
+    head_cont = self->queue[self->head];
+    self->head = (self->head + 1) & self->size_mask;
+    DEBUG("[%p] Yielding to continuation %p\n", self, head_cont);
+    return cps_resume(head_cont, cont);
 }
 
-static int
-cps_rr__start(struct cps_cont *cont, struct cps_cont *next)
+int
+cps_rr_drain(struct cps_rr *pself)
 {
     struct cps_rr_priv  *self =
-        cps_container_of(cont, struct cps_rr_priv, public.start);
-    self->done = next;
-    return cps_rr__yield(&self->public.yield, cps_done);
+        cps_container_of(pself, struct cps_rr_priv, public);
+    while (!queue_is_empty(self)) {
+        int  rc;
+        struct cps_cont  *head_cont = self->queue[self->head];
+        self->head = (self->head + 1) & self->size_mask;
+        DEBUG("[%p] Yielding to continuation %p\n", self, head_cont);
+        rc = cps_resume(head_cont, &self->public.yield);
+        if (rc != 0) {
+            return rc;
+        }
+    }
+    DEBUG("[%p] All continuations finished\n", self);
+    return 0;
 }

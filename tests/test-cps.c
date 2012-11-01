@@ -29,6 +29,7 @@ struct save_int {
     struct cps_cont  parent;
     unsigned int  *dest;
     unsigned int  value;
+    unsigned int  run_count;
 };
 
 static int
@@ -36,10 +37,18 @@ save_int__resume(struct cps_cont *cont, struct cps_cont *next)
 {
     struct save_int  *self = cps_container_of(cont, struct save_int, parent);
     *self->dest = self->value;
+    self->run_count++;
     return cps_return(next);
 }
 
-#define SAVE_INT_INIT(d, v)  { { save_int__resume }, (d), (v) }
+#define SAVE_INT_INIT(d, v)  { { save_int__resume }, (d), (v), 0 }
+
+static void
+save_int_verify(struct save_int *i)
+{
+    fail_unless_equal("Continuation result", "%u", i->value, *i->dest);
+    fail_unless_equal("Continuation run count", "%u", 1, i->run_count);
+}
 
 
 struct save_int2 {
@@ -50,6 +59,8 @@ struct save_int2 {
     struct cps_cont  step2;
     unsigned int  *dest2;
     unsigned int  value2;
+
+    unsigned int  run_count;
 };
 
 static int
@@ -57,6 +68,7 @@ save_int2__step1(struct cps_cont *cont, struct cps_cont *next)
 {
     struct save_int2  *self = cps_container_of(cont, struct save_int2, step1);
     *self->dest1 = self->value1;
+    self->run_count++;
     return cps_resume(next, &self->step2);
 }
 
@@ -65,11 +77,27 @@ save_int2__step2(struct cps_cont *cont, struct cps_cont *next)
 {
     struct save_int2  *self = cps_container_of(cont, struct save_int2, step2);
     *self->dest2 = self->value2;
+    self->run_count++;
     return cps_return(next);
 }
 
 #define SAVE_INT2_INIT(d1, v1, d2, v2) \
-    { { save_int2__step1 }, (d1), (v1), { save_int2__step2 }, (d2), (v2) }
+    { { save_int2__step1 }, (d1), (v1), { save_int2__step2 }, (d2), (v2), 0 }
+
+static void
+save_int2_verify1(struct save_int2 *i)
+{
+    fail_unless_equal("Continuation result #1", "%u", i->value1, *i->dest1);
+    fail_unless_equal("Continuation run count", "%u", 1, i->run_count);
+}
+
+static void
+save_int2_verify2(struct save_int2 *i)
+{
+    fail_unless_equal("Continuation result #1", "%u", i->value1, *i->dest1);
+    fail_unless_equal("Continuation result #2", "%u", i->value2, *i->dest2);
+    fail_unless_equal("Continuation run count", "%u", 2, i->run_count);
+}
 
 
 /*-----------------------------------------------------------------------
@@ -82,7 +110,7 @@ START_TEST(test_cps_01)
     unsigned int  result = 0;
     struct save_int  i = SAVE_INT_INIT(&result, 10);
     fail_if(cps_run(&i.parent), "Error running continuations");
-    fail_unless_equal("Continuation result", "%u", 10, result);
+    save_int_verify(&i);
 }
 END_TEST
 
@@ -94,8 +122,8 @@ START_TEST(test_cps_02)
     struct save_int  i1 = SAVE_INT_INIT(&result1, 10);
     struct save_int  i2 = SAVE_INT_INIT(&result2, 20);
     fail_if(cps_resume(&i1.parent, &i2.parent), "Error running continuations");
-    fail_unless_equal("Continuation #1 result", "%u", 10, result1);
-    fail_unless_equal("Continuation #2 result", "%u", 20, result2);
+    save_int_verify(&i1);
+    save_int_verify(&i2);
 }
 END_TEST
 
@@ -112,10 +140,10 @@ START_TEST(test_cps_03)
     cps_rr_add(rr, &i1.parent);
     cps_rr_add(rr, &i2.parent);
     cps_rr_add(rr, &i3.parent);
-    fail_if(cps_rr_run(rr), "Error running continuations");
-    fail_unless_equal("Continuation #1 result", "%u", 10, result1);
-    fail_unless_equal("Continuation #2 result", "%u", 20, result2);
-    fail_unless_equal("Continuation #3 result", "%u", 30, result3);
+    fail_if(cps_rr_drain(rr), "Error running continuations");
+    save_int_verify(&i1);
+    save_int_verify(&i2);
+    save_int_verify(&i3);
     cps_rr_free(rr);
 }
 END_TEST
@@ -136,13 +164,10 @@ START_TEST(test_cps_04)
     cps_rr_add(rr, &i1.step1);
     cps_rr_add(rr, &i2.step1);
     cps_rr_add(rr, &i3.step1);
-    fail_if(cps_rr_run(rr), "Error running continuations");
-    fail_unless_equal("Continuation #1 result #1", "%u", 10, result1a);
-    fail_unless_equal("Continuation #1 result #2", "%u", 15, result1b);
-    fail_unless_equal("Continuation #2 result #1", "%u", 20, result2a);
-    fail_unless_equal("Continuation #2 result #2", "%u", 25, result2b);
-    fail_unless_equal("Continuation #3 result #1", "%u", 30, result3a);
-    fail_unless_equal("Continuation #3 result #2", "%u", 35, result3b);
+    fail_if(cps_rr_drain(rr), "Error running continuations");
+    save_int2_verify2(&i1);
+    save_int2_verify2(&i2);
+    save_int2_verify2(&i3);
     cps_rr_free(rr);
 }
 END_TEST
@@ -161,11 +186,38 @@ START_TEST(test_cps_05)
     cps_rr_add(rr, &i1.parent);
     cps_rr_add(rr, &i2.step1);
     cps_rr_add(rr, &i3.parent);
-    fail_if(cps_rr_run(rr), "Error running continuations");
-    fail_unless_equal("Continuation #1 result", "%u", 10, result1);
-    fail_unless_equal("Continuation #2 result #1", "%u", 20, result2a);
-    fail_unless_equal("Continuation #2 result #2", "%u", 25, result2b);
-    fail_unless_equal("Continuation #3 result", "%u", 30, result3);
+    fail_if(cps_rr_drain(rr), "Error running continuations");
+    save_int_verify(&i1);
+    save_int2_verify2(&i2);
+    save_int_verify(&i3);
+    cps_rr_free(rr);
+}
+END_TEST
+
+START_TEST(test_cps_06)
+{
+    DESCRIBE_TEST;
+    unsigned int  result1a = 0;
+    unsigned int  result1b = 0;
+    unsigned int  result2a = 0;
+    unsigned int  result2b = 0;
+    unsigned int  result3a = 0;
+    unsigned int  result3b = 0;
+    struct save_int2  i1 = SAVE_INT2_INIT(&result1a, 10, &result1b, 15);
+    struct save_int2  i2 = SAVE_INT2_INIT(&result2a, 20, &result2b, 25);
+    struct save_int2  i3 = SAVE_INT2_INIT(&result3a, 30, &result3b, 35);
+    struct cps_rr  *rr = cps_rr_new();
+    cps_rr_add(rr, &i1.step1);
+    cps_rr_add(rr, &i2.step1);
+    cps_rr_add(rr, &i3.step1);
+    fail_if(cps_rr_run_one_lap(rr), "Error running continuations");
+    save_int2_verify1(&i1);
+    save_int2_verify1(&i2);
+    save_int2_verify1(&i3);
+    fail_if(cps_rr_run_one_lap(rr), "Error running continuations");
+    save_int2_verify2(&i1);
+    save_int2_verify2(&i2);
+    save_int2_verify2(&i3);
     cps_rr_free(rr);
 }
 END_TEST
@@ -186,6 +238,7 @@ test_suite()
     tcase_add_test(tc_cps, test_cps_03);
     tcase_add_test(tc_cps, test_cps_04);
     tcase_add_test(tc_cps, test_cps_05);
+    tcase_add_test(tc_cps, test_cps_06);
     suite_add_tcase(s, tc_cps);
 
     return s;
