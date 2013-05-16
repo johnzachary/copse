@@ -26,22 +26,36 @@
  */
 
 struct save_int {
-    struct cps_cont  parent;
+    struct cps_cont  *cont;
     unsigned int  *dest;
     unsigned int  value;
     unsigned int  run_count;
 };
 
 static int
-save_int__resume(struct cps_cont *cont, struct cps_cont *next)
+save_int__resume(void *user_data, struct cps_cont *next)
 {
-    struct save_int  *self = cps_container_of(cont, struct save_int, parent);
+    struct save_int  *self = user_data;
     *self->dest = self->value;
     self->run_count++;
     return cps_return(next);
 }
 
-#define SAVE_INT_INIT(d, v)  { { save_int__resume }, (d), (v), 0 }
+static void
+save_int_init(struct save_int *self, unsigned int *dest, unsigned int value)
+{
+    self->cont = cps_cont_new();
+    cps_cont_set(self->cont, self, NULL, save_int__resume);
+    self->dest = dest;
+    self->value = value;
+    self->run_count = 0;
+}
+
+static void
+save_int_done(struct save_int *self)
+{
+    cps_cont_free(self->cont);
+}
 
 static void
 save_int_verify(struct save_int *i)
@@ -52,11 +66,11 @@ save_int_verify(struct save_int *i)
 
 
 struct save_int2 {
-    struct cps_cont  step1;
+    struct cps_cont  *step1;
     unsigned int  *dest1;
     unsigned int  value1;
 
-    struct cps_cont  step2;
+    struct cps_cont  *step2;
     unsigned int  *dest2;
     unsigned int  value2;
 
@@ -64,25 +78,45 @@ struct save_int2 {
 };
 
 static int
-save_int2__step1(struct cps_cont *cont, struct cps_cont *next)
+save_int2__step1(void *user_data, struct cps_cont *next)
 {
-    struct save_int2  *self = cps_container_of(cont, struct save_int2, step1);
+    struct save_int2  *self = user_data;
     *self->dest1 = self->value1;
     self->run_count++;
-    return cps_resume(next, &self->step2);
+    return cps_resume(next, self->step2);
 }
 
 static int
-save_int2__step2(struct cps_cont *cont, struct cps_cont *next)
+save_int2__step2(void *user_data, struct cps_cont *next)
 {
-    struct save_int2  *self = cps_container_of(cont, struct save_int2, step2);
+    struct save_int2  *self = user_data;
     *self->dest2 = self->value2;
     self->run_count++;
     return cps_return(next);
 }
 
-#define SAVE_INT2_INIT(d1, v1, d2, v2) \
-    { { save_int2__step1 }, (d1), (v1), { save_int2__step2 }, (d2), (v2), 0 }
+static void
+save_int2_init(struct save_int2 *self,
+               unsigned int *dest1, unsigned int value1,
+               unsigned int *dest2, unsigned int value2)
+{
+    self->step1 = cps_cont_new();
+    cps_cont_set(self->step1, self, NULL, save_int2__step1);
+    self->step2 = cps_cont_new();
+    cps_cont_set(self->step2, self, NULL, save_int2__step2);
+    self->dest1 = dest1;
+    self->value1 = value1;
+    self->dest2 = dest2;
+    self->value2 = value2;
+    self->run_count = 0;
+}
+
+static void
+save_int2_done(struct save_int2 *self)
+{
+    cps_cont_free(self->step1);
+    cps_cont_free(self->step2);
+}
 
 static void
 save_int2_verify1(struct save_int2 *i)
@@ -108,9 +142,11 @@ START_TEST(test_cps_01)
 {
     DESCRIBE_TEST;
     unsigned int  result = 0;
-    struct save_int  i = SAVE_INT_INIT(&result, 10);
-    fail_if(cps_run(&i.parent), "Error running continuations");
+    struct save_int  i;
+    save_int_init(&i, &result, 10);
+    fail_if(cps_run(i.cont), "Error running continuations");
     save_int_verify(&i);
+    save_int_done(&i);
 }
 END_TEST
 
@@ -119,11 +155,15 @@ START_TEST(test_cps_02)
     DESCRIBE_TEST;
     unsigned int  result1 = 0;
     unsigned int  result2 = 0;
-    struct save_int  i1 = SAVE_INT_INIT(&result1, 10);
-    struct save_int  i2 = SAVE_INT_INIT(&result2, 20);
-    fail_if(cps_resume(&i1.parent, &i2.parent), "Error running continuations");
+    struct save_int  i1;
+    struct save_int  i2;
+    save_int_init(&i1, &result1, 10);
+    save_int_init(&i2, &result2, 20);
+    fail_if(cps_resume(i1.cont, i2.cont), "Error running continuations");
     save_int_verify(&i1);
     save_int_verify(&i2);
+    save_int_done(&i1);
+    save_int_done(&i2);
 }
 END_TEST
 
@@ -133,18 +173,24 @@ START_TEST(test_cps_03)
     unsigned int  result1 = 0;
     unsigned int  result2 = 0;
     unsigned int  result3 = 0;
-    struct save_int  i1 = SAVE_INT_INIT(&result1, 10);
-    struct save_int  i2 = SAVE_INT_INIT(&result2, 20);
-    struct save_int  i3 = SAVE_INT_INIT(&result3, 30);
+    struct save_int  i1;
+    struct save_int  i2;
+    struct save_int  i3;
     struct cps_rr  *rr = cps_rr_new();
-    cps_rr_add(rr, &i1.parent);
-    cps_rr_add(rr, &i2.parent);
-    cps_rr_add(rr, &i3.parent);
+    save_int_init(&i1, &result1, 10);
+    save_int_init(&i2, &result2, 20);
+    save_int_init(&i3, &result3, 30);
+    cps_rr_add(rr, i1.cont);
+    cps_rr_add(rr, i2.cont);
+    cps_rr_add(rr, i3.cont);
     fail_if(cps_rr_drain(rr), "Error running continuations");
     save_int_verify(&i1);
     save_int_verify(&i2);
     save_int_verify(&i3);
     cps_rr_free(rr);
+    save_int_done(&i1);
+    save_int_done(&i2);
+    save_int_done(&i3);
 }
 END_TEST
 
@@ -157,18 +203,24 @@ START_TEST(test_cps_04)
     unsigned int  result2b = 0;
     unsigned int  result3a = 0;
     unsigned int  result3b = 0;
-    struct save_int2  i1 = SAVE_INT2_INIT(&result1a, 10, &result1b, 15);
-    struct save_int2  i2 = SAVE_INT2_INIT(&result2a, 20, &result2b, 25);
-    struct save_int2  i3 = SAVE_INT2_INIT(&result3a, 30, &result3b, 35);
+    struct save_int2  i1;
+    struct save_int2  i2;
+    struct save_int2  i3;
     struct cps_rr  *rr = cps_rr_new();
-    cps_rr_add(rr, &i1.step1);
-    cps_rr_add(rr, &i2.step1);
-    cps_rr_add(rr, &i3.step1);
+    save_int2_init(&i1, &result1a, 10, &result1b, 15);
+    save_int2_init(&i2, &result2a, 20, &result2b, 25);
+    save_int2_init(&i3, &result3a, 30, &result3b, 35);
+    cps_rr_add(rr, i1.step1);
+    cps_rr_add(rr, i2.step1);
+    cps_rr_add(rr, i3.step1);
     fail_if(cps_rr_drain(rr), "Error running continuations");
     save_int2_verify2(&i1);
     save_int2_verify2(&i2);
     save_int2_verify2(&i3);
     cps_rr_free(rr);
+    save_int2_done(&i1);
+    save_int2_done(&i2);
+    save_int2_done(&i3);
 }
 END_TEST
 
@@ -179,18 +231,24 @@ START_TEST(test_cps_05)
     unsigned int  result2a = 0;
     unsigned int  result2b = 0;
     unsigned int  result3 = 0;
-    struct save_int  i1 = SAVE_INT_INIT(&result1, 10);
-    struct save_int2  i2 = SAVE_INT2_INIT(&result2a, 20, &result2b, 25);
-    struct save_int  i3 = SAVE_INT_INIT(&result3, 30);
+    struct save_int  i1;
+    struct save_int2  i2;
+    struct save_int  i3;
     struct cps_rr  *rr = cps_rr_new();
-    cps_rr_add(rr, &i1.parent);
-    cps_rr_add(rr, &i2.step1);
-    cps_rr_add(rr, &i3.parent);
+    save_int_init(&i1, &result1, 10);
+    save_int2_init(&i2, &result2a, 20, &result2b, 25);
+    save_int_init(&i3, &result3, 30);
+    cps_rr_add(rr, i1.cont);
+    cps_rr_add(rr, i2.step1);
+    cps_rr_add(rr, i3.cont);
     fail_if(cps_rr_drain(rr), "Error running continuations");
     save_int_verify(&i1);
     save_int2_verify2(&i2);
     save_int_verify(&i3);
     cps_rr_free(rr);
+    save_int_done(&i1);
+    save_int2_done(&i2);
+    save_int_done(&i3);
 }
 END_TEST
 
@@ -203,13 +261,16 @@ START_TEST(test_cps_06)
     unsigned int  result2b = 0;
     unsigned int  result3a = 0;
     unsigned int  result3b = 0;
-    struct save_int2  i1 = SAVE_INT2_INIT(&result1a, 10, &result1b, 15);
-    struct save_int2  i2 = SAVE_INT2_INIT(&result2a, 20, &result2b, 25);
-    struct save_int2  i3 = SAVE_INT2_INIT(&result3a, 30, &result3b, 35);
+    struct save_int2  i1;
+    struct save_int2  i2;
+    struct save_int2  i3;
     struct cps_rr  *rr = cps_rr_new();
-    cps_rr_add(rr, &i1.step1);
-    cps_rr_add(rr, &i2.step1);
-    cps_rr_add(rr, &i3.step1);
+    save_int2_init(&i1, &result1a, 10, &result1b, 15);
+    save_int2_init(&i2, &result2a, 20, &result2b, 25);
+    save_int2_init(&i3, &result3a, 30, &result3b, 35);
+    cps_rr_add(rr, i1.step1);
+    cps_rr_add(rr, i2.step1);
+    cps_rr_add(rr, i3.step1);
     fail_if(cps_rr_run_one_lap(rr), "Error running continuations");
     save_int2_verify1(&i1);
     save_int2_verify1(&i2);
@@ -219,6 +280,9 @@ START_TEST(test_cps_06)
     save_int2_verify2(&i2);
     save_int2_verify2(&i3);
     cps_rr_free(rr);
+    save_int2_done(&i1);
+    save_int2_done(&i2);
+    save_int2_done(&i3);
 }
 END_TEST
 

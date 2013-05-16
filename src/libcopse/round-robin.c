@@ -28,8 +28,8 @@
 
 #define INITIAL_QUEUE_SIZE  16
 
-struct cps_rr_priv {
-    struct cps_rr  public;
+struct cps_rr {
+    struct cps_cont  *yield;
     struct cps_cont  *done;
 
     /* The work queue.  This is a ring buffer of continuation pointers.  The
@@ -54,37 +54,35 @@ struct cps_rr_priv {
 
 
 static int
-cps_rr__yield(struct cps_cont *cont, struct cps_cont *next);
+cps_rr__yield(void *user_data, struct cps_cont *next);
 
 
 struct cps_rr *
 cps_rr_new(void)
 {
-    struct cps_rr_priv  *self = malloc(sizeof(struct cps_rr_priv));
+    struct cps_rr  *self = cork_new(struct cps_rr);
     DEBUG("[%p] Allocated new round-robin scheduler\n", self);
-    self->public.yield.resume = cps_rr__yield;
+    self->yield = cps_cont_new();
+    cps_cont_set(self->yield, self, NULL, cps_rr__yield);
     self->queue = malloc(INITIAL_QUEUE_SIZE * sizeof(struct cps_cont *));
     self->size_mask = INITIAL_QUEUE_SIZE - 1;
     self->head = 0;
     self->tail = 0;
-    return &self->public;
+    return self;
 }
 
 void
-cps_rr_free(struct cps_rr *pself)
+cps_rr_free(struct cps_rr *self)
 {
-    struct cps_rr_priv  *self =
-        cps_container_of(pself, struct cps_rr_priv, public);
     DEBUG("[%p] Freeing round-robin scheduler\n", self);
+    cps_cont_free(self->yield);
     free(self->queue);
     free(self);
 }
 
 void
-cps_rr_add(struct cps_rr *pself, struct cps_cont *cont)
+cps_rr_add(struct cps_rr *self, struct cps_cont *cont)
 {
-    struct cps_rr_priv  *self =
-        cps_container_of(pself, struct cps_rr_priv, public);
     size_t  old_used_size = queue_used_size(self);
 
     DEBUG("[%p] Adding continuation %p\n", self, cont);
@@ -126,12 +124,16 @@ cps_rr_add(struct cps_rr *pself, struct cps_cont *cont)
     self->tail = (self->tail + 1) & self->size_mask;
 }
 
+struct cps_cont *
+cps_rr_get_yield(struct cps_rr *rr)
+{
+    return rr->yield;
+}
 
 static int
-cps_rr__yield(struct cps_cont *cont, struct cps_cont *next)
+cps_rr__yield(void *user_data, struct cps_cont *next)
 {
-    struct cps_rr_priv  *self =
-        cps_container_of(cont, struct cps_rr_priv, public.yield);
+    struct cps_rr  *self = user_data;
     struct cps_cont  *head_cont;
 
     /* Add `next` to the work queue. */
@@ -144,24 +146,34 @@ cps_rr__yield(struct cps_cont *cont, struct cps_cont *next)
     head_cont = self->queue[self->head];
     self->head = (self->head + 1) & self->size_mask;
     DEBUG("[%p] Yielding to continuation %p\n", self, head_cont);
-    return cps_resume(head_cont, cont);
+    return cps_resume(head_cont, self->yield);
 }
 
 int
-cps_rr_drain(struct cps_rr *pself)
+cps_rr_drain(struct cps_rr *self)
 {
-    struct cps_rr_priv  *self =
-        cps_container_of(pself, struct cps_rr_priv, public);
     while (!queue_is_empty(self)) {
         int  rc;
         struct cps_cont  *head_cont = self->queue[self->head];
         self->head = (self->head + 1) & self->size_mask;
         DEBUG("[%p] Yielding to continuation %p\n", self, head_cont);
-        rc = cps_resume(head_cont, &self->public.yield);
+        rc = cps_resume(head_cont, self->yield);
         if (rc != 0) {
             return rc;
         }
     }
     DEBUG("[%p] All continuations finished\n", self);
     return 0;
+}
+
+int
+cps_rr_resume(struct cps_rr *rr, struct cps_cont *next)
+{
+    return cps_resume(rr->yield, next);
+}
+
+int
+cps_rr_run_one_lap(struct cps_rr *rr)
+{
+    return cps_run(rr->yield);
 }
