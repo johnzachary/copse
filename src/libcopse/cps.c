@@ -12,6 +12,10 @@
 #include "copse/cps.h"
 
 
+/*-----------------------------------------------------------------------
+ * Continuations
+ */
+
 struct cps_cont *
 cps_cont_new(void)
 {
@@ -46,14 +50,30 @@ cps_cont_set_resume(struct cps_cont *cont, cps_cont_resume_f resume)
     cont->resume = resume;
 }
 
-static int
+
+/*-----------------------------------------------------------------------
+ * Ending a continuation
+ */
+
+static void
 cps_done__resume(void *user_data, struct cps_cont *next)
 {
-    return 0;
 }
 
-static struct cps_cont  cps_done_cont__instance = {
+static struct cps_cont  cps_done = {
     NULL, NULL, cps_done__resume
 };
 
-struct cps_cont * const  cps_done_cont = &cps_done_cont__instance;
+void
+cps_call(struct cps_cont *cont)
+{
+    cps_resume(cont, &cps_done);
+}
+
+int
+cps_run(struct cps_cont *cont)
+{
+    cork_error_clear();
+    cps_resume(cont, &cps_done);
+    return CORK_UNLIKELY(cork_error_occurred())? -1: 0;
+}

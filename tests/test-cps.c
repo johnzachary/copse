@@ -1,6 +1,6 @@
 /* -*- coding: utf-8 -*-
  * ----------------------------------------------------------------------
- * Copyright © 2011-2012, RedJack, LLC.
+ * Copyright © 2011-2013, RedJack, LLC.
  * All rights reserved.
  *
  * Please see the COPYING file in this distribution for license details.
@@ -32,13 +32,13 @@ struct save_int {
     unsigned int  run_count;
 };
 
-static int
+static void
 save_int__resume(void *user_data, struct cps_cont *next)
 {
     struct save_int  *self = user_data;
     *self->dest = self->value;
     self->run_count++;
-    return cps_return(next);
+    cps_call(next);
 }
 
 static void
@@ -77,22 +77,22 @@ struct save_int2 {
     unsigned int  run_count;
 };
 
-static int
+static void
 save_int2__step1(void *user_data, struct cps_cont *next)
 {
     struct save_int2  *self = user_data;
     *self->dest1 = self->value1;
     self->run_count++;
-    return cps_resume(next, self->step2);
+    cps_resume(next, self->step2);
 }
 
-static int
+static void
 save_int2__step2(void *user_data, struct cps_cont *next)
 {
     struct save_int2  *self = user_data;
     *self->dest2 = self->value2;
     self->run_count++;
-    return cps_return(next);
+    cps_call(next);
 }
 
 static void
@@ -144,7 +144,7 @@ START_TEST(test_cps_01)
     unsigned int  result = 0;
     struct save_int  i;
     save_int_init(&i, &result, 10);
-    fail_if(cps_run(i.cont), "Error running continuations");
+    fail_if_error(cps_run(i.cont));
     save_int_verify(&i);
     save_int_done(&i);
 }
@@ -159,7 +159,7 @@ START_TEST(test_cps_02)
     struct save_int  i2;
     save_int_init(&i1, &result1, 10);
     save_int_init(&i2, &result2, 20);
-    fail_if(cps_resume(i1.cont, i2.cont), "Error running continuations");
+    cps_resume(i1.cont, i2.cont);
     save_int_verify(&i1);
     save_int_verify(&i2);
     save_int_done(&i1);
@@ -183,7 +183,7 @@ START_TEST(test_cps_03)
     cps_rr_add(rr, i1.cont);
     cps_rr_add(rr, i2.cont);
     cps_rr_add(rr, i3.cont);
-    fail_if(cps_rr_drain(rr), "Error running continuations");
+    fail_if_error(cps_rr_drain(rr));
     save_int_verify(&i1);
     save_int_verify(&i2);
     save_int_verify(&i3);
@@ -213,7 +213,7 @@ START_TEST(test_cps_04)
     cps_rr_add(rr, i1.step1);
     cps_rr_add(rr, i2.step1);
     cps_rr_add(rr, i3.step1);
-    fail_if(cps_rr_drain(rr), "Error running continuations");
+    fail_if_error(cps_rr_drain(rr));
     save_int2_verify2(&i1);
     save_int2_verify2(&i2);
     save_int2_verify2(&i3);
@@ -241,7 +241,7 @@ START_TEST(test_cps_05)
     cps_rr_add(rr, i1.cont);
     cps_rr_add(rr, i2.step1);
     cps_rr_add(rr, i3.cont);
-    fail_if(cps_rr_drain(rr), "Error running continuations");
+    fail_if_error(cps_rr_drain(rr));
     save_int_verify(&i1);
     save_int2_verify2(&i2);
     save_int_verify(&i3);
@@ -271,11 +271,11 @@ START_TEST(test_cps_06)
     cps_rr_add(rr, i1.step1);
     cps_rr_add(rr, i2.step1);
     cps_rr_add(rr, i3.step1);
-    fail_if(cps_rr_run_one_lap(rr), "Error running continuations");
+    fail_if_error(cps_rr_run_one_lap(rr));
     save_int2_verify1(&i1);
     save_int2_verify1(&i2);
     save_int2_verify1(&i3);
-    fail_if(cps_rr_run_one_lap(rr), "Error running continuations");
+    fail_if_error(cps_rr_run_one_lap(rr));
     save_int2_verify2(&i1);
     save_int2_verify2(&i2);
     save_int2_verify2(&i3);

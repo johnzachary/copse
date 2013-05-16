@@ -13,9 +13,13 @@
 #include <libcork/core.h>
 
 
+/*-----------------------------------------------------------------------
+ * Continuations
+ */
+
 struct cps_cont;
 
-typedef int
+typedef void
 (*cps_cont_resume_f)(void *user_data, struct cps_cont *next);
 
 struct cps_cont {
@@ -42,11 +46,19 @@ cps_cont_set_resume(struct cps_cont *cont, cps_cont_resume_f resume);
 #define cps_resume(c, n) ((c)->resume((c)->user_data, (n)))
 
 
-extern struct cps_cont * const  cps_done_cont;
+/*-----------------------------------------------------------------------
+ * Running a single continuation
+ */
 
-#define cps_done       (cps_done_cont)
-#define cps_return(n)  (cps_resume((n), cps_done))
-#define cps_run(n)     (cps_resume((n), cps_done))
+/* Run cont and then immediately return.  We don't automatically detect whether
+ * cont succeeds or fails. */
+void
+cps_call(struct cps_cont *cont);
+
+/* Run cont with a next continuation that captures whether cont succeeds or
+ * fails. */
+int
+cps_run(struct cps_cont *cont);
 
 
 #endif /* COPSE_CPS_H */

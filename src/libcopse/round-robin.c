@@ -53,7 +53,7 @@ struct cps_rr {
     (((self)->tail - (self)->head) & (self)->size_mask)
 
 
-static int
+static void
 cps_rr__yield(void *user_data, struct cps_cont *next);
 
 
@@ -130,7 +130,7 @@ cps_rr_get_yield(struct cps_rr *rr)
     return rr->yield;
 }
 
-static int
+static void
 cps_rr__yield(void *user_data, struct cps_cont *next)
 {
     struct cps_rr  *self = user_data;
@@ -146,34 +146,27 @@ cps_rr__yield(void *user_data, struct cps_cont *next)
     head_cont = self->queue[self->head];
     self->head = (self->head + 1) & self->size_mask;
     DEBUG("[%p] Yielding to continuation %p\n", self, head_cont);
-    return cps_resume(head_cont, self->yield);
+    cps_resume(head_cont, self->yield);
+}
+
+int
+cps_rr_run_one_lap(struct cps_rr *self)
+{
+    return cps_run(self->yield);
 }
 
 int
 cps_rr_drain(struct cps_rr *self)
 {
     while (!queue_is_empty(self)) {
-        int  rc;
         struct cps_cont  *head_cont = self->queue[self->head];
         self->head = (self->head + 1) & self->size_mask;
         DEBUG("[%p] Yielding to continuation %p\n", self, head_cont);
-        rc = cps_resume(head_cont, self->yield);
-        if (rc != 0) {
-            return rc;
+        cps_resume(head_cont, self->yield);
+        if (CORK_UNLIKELY(cork_error_occurred())) {
+            return -1;
         }
     }
     DEBUG("[%p] All continuations finished\n", self);
     return 0;
-}
-
-int
-cps_rr_resume(struct cps_rr *rr, struct cps_cont *next)
-{
-    return cps_resume(rr->yield, next);
-}
-
-int
-cps_rr_run_one_lap(struct cps_rr *rr)
-{
-    return cps_run(rr->yield);
 }
