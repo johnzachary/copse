@@ -28,6 +28,7 @@ macro(make_test test_name)
 endmacro(make_test)
 
 make_test(test-cps)
+make_test(test-fiber)
 
 #-----------------------------------------------------------------------
 # Command-line tests
