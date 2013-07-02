@@ -24,13 +24,17 @@ link_directories(${CHECK_LIBRARY_DIRS})
 macro(make_test test_name)
     add_executable(${test_name} ${test_name}.c)
     target_link_libraries(${test_name} ${CHECK_LIBRARIES} libcopse)
-    add_test(NAME ${test_name} COMMAND ${test_name})
+    add_test(${test_name} ${test_name})
 endmacro(make_test)
 
 make_test(test-cps)
 
 #-----------------------------------------------------------------------
 # Command-line tests
+
+if(TILERA)
+    configure_file(tile-test ${CMAKE_BINARY_DIR}/tile-test COPYONLY)
+endif(TILERA)
 
 find_program(
     CRAM_EXECUTABLE
@@ -43,9 +47,9 @@ find_program(
 if (CRAM_EXECUTABLE)
     configure_file(ccram ${CMAKE_BINARY_DIR}/ccram COPYONLY)
     add_test(
-        NAME cram-tests
-        WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
-        COMMAND ${CMAKE_BINARY_DIR}/ccram
+        cram-tests
+        ${CMAKE_COMMAND} -E chdir ${CMAKE_BINARY_DIR}
+        ${CMAKE_BINARY_DIR}/ccram
             --cram ${CRAM_EXECUTABLE}
             --tests ${CMAKE_CURRENT_SOURCE_DIR}
     )
