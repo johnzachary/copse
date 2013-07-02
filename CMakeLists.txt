@@ -57,7 +57,7 @@ endif()
 #-----------------------------------------------------------------------
 # Check for prerequisite libraries
 
-pkg_check_modules(CORK REQUIRED libcork)
+pkg_check_modules(CORK REQUIRED libcork>=0.12.0)
 include_directories(${CORK_INCLUDE_DIRS})
 link_directories(${CORK_LIBRARY_DIRS})
 

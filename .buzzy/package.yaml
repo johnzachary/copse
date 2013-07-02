@@ -1,0 +1,7 @@
+name: copse
+build_dependencies:
+  - pkg-config
+  - check
+dependencies:
+  - libcork >= 0.12.0
+license: BSD
