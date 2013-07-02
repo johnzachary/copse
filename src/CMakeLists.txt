@@ -9,11 +9,47 @@
 include_directories(../include)
 
 #-----------------------------------------------------------------------
+# Context implementations
+
+include(CheckCSourceCompiles)
+include(CheckTypeSize)
+
+# Address model
+
+if (NOT COPSE_CONTEXT)
+    message(STATUS "Detecting context implementation")
+    try_run(
+        COPSE_CONTEXT_RAN COPSE_CONTEXT_COMPILED
+        ${CMAKE_CURRENT_BINARY_DIR}/detect/context
+        ${CMAKE_CURRENT_SOURCE_DIR}/detect/context.c
+        CMAKE_FLAGS -DINCLUDE_DIRECTORIES:STRING=${CMAKE_SOURCE_DIR}/include
+        COMPILE_OUTPUT_VARIABLE COPSE_CONTEXT_COMPILE_RESULT
+        RUN_OUTPUT_VARIABLE COPSE_CONTEXT
+    )
+    if (NOT COPSE_CONTEXT_COMPILED)
+        message(
+            FATAL_ERROR
+            "Could not detect context implementation: ${COPSE_CONTEXT_COMPILE_RESULT}"
+        )
+    endif (NOT COPSE_CONTEXT_COMPILED)
+endif (NOT COPSE_CONTEXT)
+
+enable_language(ASM)
+message(STATUS "Using ${COPSE_CONTEXT} context implementation")
+set(LIBCOPSE_CONTEXT_SRC
+    libcopse/context/jump_${COPSE_CONTEXT}
+    libcopse/context/make_${COPSE_CONTEXT}
+)
+
+
+#-----------------------------------------------------------------------
 # Build the library
 
 set(LIBCOPSE_SRC
     libcopse/cps.c
+    libcopse/fiber.c
     libcopse/round-robin.c
+    ${LIBCOPSE_CONTEXT_SRC}
 )
 
 # Update the VERSION and SOVERSION properties below according to the following

@@ -12,7 +12,9 @@
 #define COPSE_H
 
 /* include all of the parts */
+#include <copse/context.h>
 #include <copse/cps.h>
+#include <copse/fiber.h>
 #include <copse/round-robin.h>
 
 #endif /* COPSE_H */
