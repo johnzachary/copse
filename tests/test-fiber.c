@@ -70,8 +70,8 @@ save_int_done(struct save_int *self)
 #define save_int_verify(i, rc, v) \
     do { \
         printf("[%s] Verifying %u %u\n", (i)->name, (rc), (v)); \
-        ck_assert_uint_eq((rc), (i)->run_count); \
-        ck_assert_uint_eq((v), *(i)->dest); \
+        fail_unless_equal("Run counts", "%u", (rc), (i)->run_count); \
+        fail_unless_equal("Values", "%u", (v), *(i)->dest); \
     } while (0)
 
 
@@ -129,9 +129,9 @@ save_int2_done(struct save_int2 *self)
 #define save_int2_verify(i, rc, v1, v2) \
     do { \
         printf("[%s] Verifying %u %u %u\n", (i)->name, (rc), (v1), (v2)); \
-        ck_assert_uint_eq((rc), (i)->run_count); \
-        ck_assert_uint_eq((v1), *(i)->dest1); \
-        ck_assert_uint_eq((v2), *(i)->dest2); \
+        fail_unless_equal("Run counts", "%u", (rc), (i)->run_count); \
+        fail_unless_equal("First values", "%u", (v1), *(i)->dest1); \
+        fail_unless_equal("Second values", "%u", (v2), *(i)->dest2); \
     } while (0)
 
 
