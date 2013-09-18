@@ -41,6 +41,12 @@ set(LIBCOPSE_CONTEXT_SRC
     libcopse/context/make_${COPSE_CONTEXT}
 )
 
+# Work around CMake 2.6's experimental assembly support
+if ("${CMAKE_MAJOR_VERSION}.${CMAKE_MINOR_VERSION}" STREQUAL "2.6")
+    set(CMAKE_ASM${ASM_DIALECT}_COMPILE_OBJECT
+        "<CMAKE_ASM${ASM_DIALECT}_COMPILER> -o <OBJECT> <SOURCE>")
+endif ("${CMAKE_MAJOR_VERSION}.${CMAKE_MINOR_VERSION}" STREQUAL "2.6")
+
 
 #-----------------------------------------------------------------------
 # Build the library
