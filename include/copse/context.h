@@ -95,6 +95,17 @@ struct cps_context {
     struct cps_fp  fp;
 };
 
+#elif defined(__tilegx__)
+
+/* TileGX SysV ELF (eg Linux) */
+#define CPS_HAVE_CONTEXT  "tilegx_sysv_elf_gas.S"
+#define CPS_STACK_GROWS_DOWN  1
+
+struct cps_context {
+    size_t  stack_size;
+    uint64_t  reg[28];
+};
+
 #endif /* CORK_CONFIG_ARCH */
 
 #elif CPS_CONFIG_BINARY_MACHO
