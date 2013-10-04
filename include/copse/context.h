@@ -55,7 +55,7 @@ cps_context_new_from_sp(void *sp, size_t size, cps_context_f func);
 
 #if CORK_CONFIG_ARCH_X64
 
-/* 64-bit SysV ELF (eg Linux) */
+/* 64-bit x86 SysV ELF (eg Linux) */
 #define CPS_HAVE_CONTEXT  "x86_64_sysv_elf_gas.S"
 #define CPS_STACK_GROWS_DOWN  1
 
@@ -76,7 +76,7 @@ struct cps_context {
 
 #elif CORK_CONFIG_ARCH_X86
 
-/* 32-bit SysV ELF (eg Linux) */
+/* 32-bit x86 SysV ELF (eg Linux) */
 #define CPS_HAVE_CONTEXT  "i386_sysv_elf_gas.S"
 #define CPS_STACK_GROWS_DOWN  1
 
@@ -91,6 +91,27 @@ struct cps_fp {
 
 struct cps_context {
     uint32_t  gen_reg[6];
+    struct cps_stack  stack;
+    struct cps_fp  fp;
+};
+
+#elif CORK_CONFIG_ARCH_PPC
+
+/* 32-bit PowerPC SysV ELF (eg Linux) */
+#define CPS_HAVE_CONTEXT  "ppc32_sysv_elf_gas.S"
+#define CPS_STACK_GROWS_DOWN  1
+
+struct cps_stack {
+    void  *sp;
+    size_t  size;
+};
+
+struct cps_fp {
+    uint64_t  fp_reg[19];
+};
+
+struct cps_context {
+    uint32_t  gen_reg[23];
     struct cps_stack  stack;
     struct cps_fp  fp;
 };
