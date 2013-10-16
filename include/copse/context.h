@@ -43,7 +43,7 @@ cps_context_jump(struct cps_context *from, struct cps_context const *to,
                  void *param, bool preserve_fpu);
 
 struct cps_context *
-cps_context_new_from_sp(void *sp, size_t size, cps_context_f func);
+cps_context_new(void *sp, size_t size, cps_context_f func);
 
 
 /*-----------------------------------------------------------------------
@@ -181,17 +181,6 @@ struct cps_context {
 
 #if !defined(CPS_HAVE_CONTEXT)
 #error "Don't know how to implement contexts on this platform"
-#endif
-
-
-/* sp always points to the bottom of the stack; switch it to the top if stacks
- * grow downward on this platform. */
-#if CPS_STACK_GROWS_DOWN
-#define cps_context_new(sp, size, func) \
-    cps_context_new_from_sp((sp) + (size), (size), (func))
-#else
-#define cps_context_new(sp, size, func) \
-    cps_context_new_from_sp((sp), (size), (func))
 #endif
 
 

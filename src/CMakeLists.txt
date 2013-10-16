@@ -6,7 +6,8 @@
 # Please see the COPYING file in this distribution for license details.
 # ----------------------------------------------------------------------
 
-include_directories(../include)
+include_directories(${CMAKE_SOURCE_DIR}/include)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
 
 #-----------------------------------------------------------------------
 # Context implementations
@@ -57,6 +58,7 @@ endif ("${CMAKE_MAJOR_VERSION}.${CMAKE_MINOR_VERSION}" STREQUAL "2.6")
 # Build the library
 
 set(LIBCOPSE_SRC
+    libcopse/context.c
     libcopse/cps.c
     libcopse/fiber.c
     libcopse/round-robin.c
