@@ -1,6 +1,6 @@
 /* -*- coding: utf-8 -*-
  * ----------------------------------------------------------------------
- * Copyright © 2013, RedJack, LLC.
+ * Copyright © 2013-2014, RedJack, LLC.
  * All rights reserved.
  *
  * Please see the COPYING file in this distribution for license details.
@@ -9,6 +9,8 @@
 
 #ifndef COPSE_CONTEXT_H
 #define COPSE_CONTEXT_H
+
+#include <sys/param.h>
 
 #include <libcork/config.h>
 #include <libcork/core.h>
@@ -24,6 +26,10 @@
 
 #elif defined(__APPLE__)
 #define CPS_CONFIG_BINARY_MACHO  1
+#define CPS_CONFIG_ABI_SYSV      1
+
+#elif defined (__FreeBSD__)
+#define CPS_CONFIG_BINARY_ELF    1
 #define CPS_CONFIG_ABI_SYSV      1
 
 #endif
