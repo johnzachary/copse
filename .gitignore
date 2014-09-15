@@ -1,0 +1,13 @@
+/build/
+/.build/
+
+RELEASE-VERSION
+copse.pc
+
+/copse*.tar.gz
+/copse*.tar.bz2
+
+*.[oa]
+*.os
+*.so
+*.dylib
