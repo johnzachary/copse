@@ -1,6 +1,6 @@
 /* -*- coding: utf-8 -*-
  * ----------------------------------------------------------------------
- * Copyright © 2012, RedJack, LLC.
+ * Copyright © 2012-2014, RedJack, LLC.
  * All rights reserved.
  *
  * Please see the COPYING file in this distribution for license details.
@@ -30,7 +30,7 @@ void
 cps_cont_free(struct cps_cont *cont)
 {
     cork_free_user_data(cont);
-    free(cont);
+    cork_delete(struct cps_cont, cont);
 }
 
 void

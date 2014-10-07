@@ -1,6 +1,6 @@
 /* -*- coding: utf-8 -*-
  * ----------------------------------------------------------------------
- * Copyright © 2013, RedJack, LLC.
+ * Copyright © 2013-2014, RedJack, LLC.
  * All rights reserved.
  *
  * Please see the COPYING file in this distribution for license details.
@@ -76,9 +76,9 @@ static void
 cps_fiber__free(void *user_data)
 {
     struct cps_fiber  *fiber = user_data;
-    free(fiber->stack);
+    cork_free(fiber->stack, fiber->stack_size);
     cork_free_user_data(fiber);
-    free(fiber);
+    cork_delete(struct cps_fiber, fiber);
 }
 
 struct cps_fiber *
