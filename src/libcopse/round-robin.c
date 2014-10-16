@@ -1,6 +1,6 @@
 /* -*- coding: utf-8 -*-
  * ----------------------------------------------------------------------
- * Copyright © 2012, RedJack, LLC.
+ * Copyright © 2012-2014, RedJack, LLC.
  * All rights reserved.
  *
  * Please see the COPYING file in this distribution for license details.
@@ -64,7 +64,7 @@ cps_rr_new(void)
     DEBUG("[%p] Allocated new round-robin scheduler\n", self);
     self->yield = cps_cont_new();
     cps_cont_set(self->yield, self, NULL, cps_rr__yield);
-    self->queue = malloc(INITIAL_QUEUE_SIZE * sizeof(struct cps_cont *));
+    self->queue = cork_calloc(INITIAL_QUEUE_SIZE, sizeof(struct cps_cont *));
     self->size_mask = INITIAL_QUEUE_SIZE - 1;
     self->head = 0;
     self->tail = 0;
@@ -74,10 +74,11 @@ cps_rr_new(void)
 void
 cps_rr_free(struct cps_rr *self)
 {
+    size_t  queue_size = self->size_mask + 1;
     DEBUG("[%p] Freeing round-robin scheduler\n", self);
     cps_cont_free(self->yield);
-    free(self->queue);
-    free(self);
+    cork_cfree(self->queue, queue_size, sizeof(struct cps_cont *));
+    cork_delete(struct cps_rr, self);
 }
 
 void
@@ -91,7 +92,8 @@ cps_rr_add(struct cps_rr *self, struct cps_cont *cont)
         size_t  old_size = self->size_mask + 1;
         size_t  new_size = old_size * 2;
         size_t  pre_size;
-        struct cps_cont  **queue = malloc(new_size * sizeof(struct cps_cont *));
+        struct cps_cont  **queue =
+            cork_calloc(new_size, sizeof(struct cps_cont *));
         DEBUG("[%p]   Resizing work queue to %zu elements\n", self, new_size);
 
         /* Copy the existing continuations into the beginning of the work queue.
@@ -114,6 +116,7 @@ cps_rr_add(struct cps_rr *self, struct cps_cont *cont)
                    self->head * sizeof(struct cps_cont *));
         }
 
+        cork_cfree(self->queue, old_size, sizeof(struct cps_cont *));
         self->queue = queue;
         self->head = 0;
         self->tail = old_used_size;
