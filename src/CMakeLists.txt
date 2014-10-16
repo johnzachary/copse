@@ -94,7 +94,7 @@ set(LIBCOPSE_SRC
 add_library(libcopse SHARED ${LIBCOPSE_SRC})
 set_target_properties(libcopse PROPERTIES
     OUTPUT_NAME copse
-    VERSION 0.0.0
+    VERSION 0.1.0
     SOVERSION 0)
 target_link_libraries(libcopse
     ${CORK_LIBRARIES}
