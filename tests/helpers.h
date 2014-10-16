@@ -1,6 +1,6 @@
 /* -*- coding: utf-8 -*-
  * ----------------------------------------------------------------------
- * Copyright © 2011-2013, RedJack, LLC.
+ * Copyright © 2011-2014, RedJack, LLC.
  * All rights reserved.
  *
  * Please see the COPYING file in this distribution for license details.
@@ -15,6 +15,25 @@
 
 #define DESCRIBE_TEST \
     fprintf(stderr, "--- %s\n", __func__);
+
+
+/*-----------------------------------------------------------------------
+ * Allocators
+ */
+
+/* Use a custom allocator that debugs every allocation. */
+
+static void
+setup_allocator(void)
+{
+    struct cork_alloc  *debug = cork_debug_alloc_new(cork_allocator);
+    cork_set_allocator(debug);
+}
+
+
+/*-----------------------------------------------------------------------
+ * Error reporting
+ */
 
 #define fail_if_error(call) \
     do { \

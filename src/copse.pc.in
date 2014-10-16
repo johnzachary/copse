@@ -11,4 +11,4 @@ Version: @VERSION@
 URL: http://github.com/redjack/copse/
 Libs: -L${libdir} -lcopse
 Cflags: -I${includedir}
-Requires: libcork >= 0.12.0
+Requires: libcork >= 0.14.0
