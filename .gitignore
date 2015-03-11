@@ -11,3 +11,5 @@ copse.pc
 *.os
 *.so
 *.dylib
+
+!.travis.yml
