@@ -1,7 +1,6 @@
 /build/
 /.build/
 
-RELEASE-VERSION
 copse.pc
 
 /copse*.tar.gz
