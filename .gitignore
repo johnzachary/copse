@@ -1,7 +1,6 @@
 /build/
 /.build/
 
-RELEASE-VERSION
 copse.pc
 
 /copse*.tar.gz
@@ -11,3 +10,5 @@ copse.pc
 *.os
 *.so
 *.dylib
+
+!.travis.yml
